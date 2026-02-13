@@ -9,11 +9,42 @@ import re
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from PIL import Image, ImageEnhance, ImageOps
-from pdf2image import convert_from_bytes
 import pytesseract
+
+# Poppler PATH setup - MUST happen before importing pdf2image
+def _setup_poppler_path():
+    """Setup Poppler path before pdf2image import"""
+    current_dir = Path(__file__).parent.resolve()
+    
+    # Search patterns for poppler
+    patterns = [
+        'poppler*/Library/bin',
+        'poppler*/bin',
+        '*/poppler*/Library/bin',
+        '*/poppler*/bin'
+    ]
+    
+    for pattern in patterns:
+        matches = list(current_dir.glob(pattern))
+        if matches:
+            poppler_bin = str(matches[0])
+            current_path = os.environ.get('PATH', '')
+            if poppler_bin not in current_path:
+                os.environ['PATH'] = poppler_bin + os.pathsep + current_path
+                logging.getLogger(__name__).info(f"Added Poppler to PATH: {poppler_bin}")
+            return poppler_bin
+    return None
+
+# Setup Poppler path before importing pdf2image
+_POPPLER_PATH = _setup_poppler_path()
+
+# Now import pdf2image after PATH is set
+from pdf2image import convert_from_bytes
 
 
 def get_poppler_path() -> Optional[str]:
+    """Return the detected Poppler path"""
+    return _POPPLER_PATH
     """
     Détecte automatiquement le chemin de Poppler.
     Cherche d'abord dans le dossier du projet, puis dans le PATH système.
@@ -74,17 +105,9 @@ class PopplerNotFoundError(RuntimeError):
 def convert_pdf_to_images(pdf_data: bytes, dpi: int = 300) -> List[Image.Image]:
     """
     Convertit un PDF en images en utilisant Poppler.
-    Tente d'abord l'auto-détection, sinon utilise le PATH système.
+    Le PATH est déjà configuré au moment de l'import du module.
     """
     poppler_path = get_poppler_path()
-    
-    # Si Poppler est trouvé dans le projet, l'ajouter au PATH système
-    # pour que les DLLs soient trouvées sur Windows
-    if poppler_path:
-        import os
-        current_path = os.environ.get('PATH', '')
-        if poppler_path not in current_path:
-            os.environ['PATH'] = poppler_path + os.pathsep + current_path
     
     try:
         if poppler_path:

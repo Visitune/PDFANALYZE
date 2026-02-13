@@ -80,7 +80,7 @@ def sidebar_config():
         
         # Vérifier si Gemini est disponible
         if not GEMINI_AVAILABLE:
-            st.error("❌ google-generativeai n'est pas installé. Lancez: pip install google-generativeai")
+            st.error("❌ google-genai n'est pas installé. Lancez: pip install google-genai")
             return None, None, None
         
         # Clé API Gemini
@@ -474,8 +474,8 @@ def main():
     # Configuration
     config_result = sidebar_config()
     if config_result is None:
-        st.error("❌ Impossible de démarrer: google-generativeai n'est pas installé")
-        st.code("pip install google-generativeai", language="bash")
+        st.error("❌ Impossible de démarrer: google-genai n'est pas installé")
+        st.code("pip install google-genai", language="bash")
         return
     
     api_key, model, ocr_config = config_result
