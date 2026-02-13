@@ -1,8 +1,0 @@
-Flask
-PyPDF2
-pdf2image
-pytesseract
-reportlab
-openai==0.28.0
-gunicorn
-Pillow
