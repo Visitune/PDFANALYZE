@@ -1,5 +1,5 @@
 """
-Moteur d'analyse IA pour les fiches techniques - Utilise Google Gemini Pro
+Moteur d'analyse IA pour les fiches techniques - Supporte Gemini et Groq API
 """
 
 import os
@@ -8,6 +8,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import asdict
 
+# Try importing Gemini
 try:
     from google import genai
     from google.genai import types
@@ -15,31 +16,18 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+# Try importing Groq
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
 from config import DocumentTemplate, ControlPoint, CriticityLevel
 
-class TechnicalDocumentAnalyzer:
-    """Analyseur de documents techniques basé sur Google Gemini Pro"""
-    
-    AVAILABLE_MODELS = {
-        "gemini-3-pro-preview": "Gemini 3 Pro Preview (Meilleur modèle)",
-        "gemini-2.5-pro-preview": "Gemini 2.5 Pro Preview",
-        "gemini-2.0-flash": "Gemini 2.0 Flash",
-        "gemini-1.5-pro": "Gemini 1.5 Pro",
-        "gemini-1.5-flash": "Gemini 1.5 Flash",
-    }
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-pro-preview"):
-        if not GEMINI_AVAILABLE:
-            raise ImportError("google-genai n'est pas installé. Lancez: pip install google-genai")
-        
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("Clé API Gemini requise. Définissez GEMINI_API_KEY.")
-        
-        # New API uses client-based approach
-        self.client = genai.Client(api_key=self.api_key)
-        self.model_name = model
-        self.logger = logging.getLogger(__name__)
+
+class BaseDocumentAnalyzer:
+    """Classe de base pour les analyseurs"""
     
     def generate_prompt(self, template: DocumentTemplate) -> str:
         """Génère le prompt pour l'IA basé sur le template"""
@@ -126,6 +114,31 @@ Réponds en JSON avec cette structure exacte:
 
 """
         return prompt
+
+
+class TechnicalDocumentAnalyzer(BaseDocumentAnalyzer):
+    """Analyseur de documents techniques basé sur Google Gemini"""
+    
+    AVAILABLE_MODELS = {
+        "gemini-3-pro-preview": "Gemini 3 Pro Preview (Meilleur modèle)",
+        "gemini-2.5-pro-preview": "Gemini 2.5 Pro Preview",
+        "gemini-2.0-flash": "Gemini 2.0 Flash",
+        "gemini-1.5-pro": "Gemini 1.5 Pro",
+        "gemini-1.5-flash": "Gemini 1.5 Flash",
+    }
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-pro-preview"):
+        if not GEMINI_AVAILABLE:
+            raise ImportError("google-genai n'est pas installé. Lancez: pip install google-genai")
+        
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        if not self.api_key:
+            raise ValueError("Clé API Gemini requise. Définissez GEMINI_API_KEY.")
+        
+        # New API uses client-based approach
+        self.client = genai.Client(api_key=self.api_key)
+        self.model_name = model
+        self.logger = logging.getLogger(__name__)
     
     def analyze(self, text: str, template: DocumentTemplate) -> Dict[str, Any]:
         """Analyse un texte selon le template fourni avec Gemini"""
@@ -220,10 +233,114 @@ Réponds en JSON avec cette structure exacte:
         
         return comparison
 
+
+class GroqDocumentAnalyzer(BaseDocumentAnalyzer):
+    """Analyseur de documents utilisant l'API Groq (alternative gratuite)"""
+    
+    AVAILABLE_MODELS = {
+        "llama-3.3-70b-versatile": "Llama 3.3 70B (Recommandé - Puissant)",
+        "llama-3.1-8b-instant": "Llama 3.1 8B (Ultra rapide)",
+        "mixtral-8x7b-32768": "Mixtral 8x7B (Performant)",
+        "gemma2-9b-it": "Gemma 2 9B (Léger)",
+    }
+    
+    def __init__(self, api_key: Optional[str] = None, model: str = "llama-3.3-70b-versatile"):
+        if not GROQ_AVAILABLE:
+            raise ImportError("groq n'est pas installé. Lancez: pip install groq")
+        
+        self.api_key = api_key or os.environ.get("GROQ_API_KEY")
+        if not self.api_key:
+            raise ValueError("Clé API Groq requise. Définissez GROQ_API_KEY.")
+        
+        self.client = Groq(api_key=self.api_key)
+        self.model_name = model
+        self.logger = logging.getLogger(__name__)
+    
+    def analyze(self, text: str, template: DocumentTemplate) -> Dict[str, Any]:
+        """Analyse un texte selon le template fourni avec Groq API"""
+        
+        prompt = self.generate_prompt(template)
+        full_prompt = f"Tu es un système d'analyse documentaire expert. Tu réponds uniquement en JSON valide, sans texte additionnel.\n\n{prompt}\n\n{text}"
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Tu es un expert en analyse de documents techniques. Tu réponds uniquement en JSON valide."
+                    },
+                    {
+                        "role": "user",
+                        "content": full_prompt
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=8000,
+                response_format={"type": "json_object"}
+            )
+            
+            result_text = response.choices[0].message.content
+            
+            if not result_text:
+                return {"error": "Réponse vide de l'API Groq", "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0, "recommendations": "Erreur: réponse vide"}}
+            
+            result = json.loads(result_text)
+            
+            # Validate required fields
+            if "points" not in result:
+                result["points"] = []
+            if "summary" not in result:
+                result["summary"] = {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}
+            if "global_status" not in result:
+                result["global_status"] = "NON_CONFORME"
+            
+            self.logger.info(f"Analyse Groq terminée: {result['summary'].get('total_points', 0)} points analysés")
+            return result
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Erreur parsing JSON: {e}")
+            return {"error": f"Format de réponse invalide: {e}", "raw_response": result_text if 'result_text' in locals() and result_text else "N/A", "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}}
+        except Exception as e:
+            self.logger.error(f"Erreur analyse Groq: {e}")
+            import traceback
+            return {"error": str(e), "traceback": traceback.format_exc(), "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}}
+    
+    @classmethod
+    def list_available_models(cls) -> Dict[str, str]:
+        """Liste les modèles Groq disponibles"""
+        return cls.AVAILABLE_MODELS
+
+
+# Factory pour créer l'analyseur approprié
+def create_analyzer(provider: str = "gemini", api_key: Optional[str] = None, model: Optional[str] = None):
+    """
+    Factory pour créer un analyseur selon le provider choisi.
+    
+    Args:
+        provider: "gemini" ou "groq"
+        api_key: Clé API (optionnel, sinon utilise les variables d'environnement)
+        model: Nom du modèle (optionnel)
+    
+    Returns:
+        Instance de TechnicalDocumentAnalyzer ou GroqDocumentAnalyzer
+    """
+    if provider.lower() == "groq":
+        if not GROQ_AVAILABLE:
+            raise ImportError("groq n'est pas installé. Lancez: pip install groq")
+        return GroqDocumentAnalyzer(api_key=api_key, model=model or "llama-3.3-70b-versatile")
+    elif provider.lower() == "gemini":
+        if not GEMINI_AVAILABLE:
+            raise ImportError("google-genai n'est pas installé. Lancez: pip install google-genai")
+        return TechnicalDocumentAnalyzer(api_key=api_key, model=model or "gemini-3-pro-preview")
+    else:
+        raise ValueError(f"Provider inconnu: {provider}. Utilisez 'gemini' ou 'groq'")
+
+
 class BatchAnalyzer:
     """Analyse par lot de documents"""
     
-    def __init__(self, analyzer: TechnicalDocumentAnalyzer):
+    def __init__(self, analyzer):
         self.analyzer = analyzer
         self.logger = logging.getLogger(__name__)
     

@@ -15,7 +15,10 @@ from PIL import Image
 # Importer nos modules
 from config import TEMPLATES, get_template, DocumentTemplate, ControlPoint, CriticityLevel
 from ocr_engine import OCREngine, OCRLanguageManager
-from analyzer import TechnicalDocumentAnalyzer, BatchAnalyzer, GEMINI_AVAILABLE
+from analyzer import (
+    TechnicalDocumentAnalyzer, GroqDocumentAnalyzer, BatchAnalyzer,
+    GEMINI_AVAILABLE, GROQ_AVAILABLE, create_analyzer
+)
 from report_generator import ReportGenerator, BatchReportGenerator
 
 # Configuration de la page
@@ -78,33 +81,73 @@ def sidebar_config():
     with st.sidebar:
         st.title("⚙️ Configuration")
         
-        # Vérifier si Gemini est disponible
-        if not GEMINI_AVAILABLE:
-            st.error("❌ google-genai n'est pas installé. Lancez: pip install google-genai")
-            return None, None, None
+        # Sélection du provider AI
+        st.subheader("🔌 Provider AI")
         
-        # Clé API Gemini
-        api_key = st.text_input(
-            "🔑 Clé API Google Gemini",
-            type="password",
-            value=os.environ.get("GEMINI_API_KEY", ""),
-            help="Votre clé API Gemini (obtenez-la sur https://makersuite.google.com/app/apikey)"
+        available_providers = []
+        if GEMINI_AVAILABLE:
+            available_providers.append("Gemini")
+        if GROQ_AVAILABLE:
+            available_providers.append("Groq (Gratuit)")
+        
+        if not available_providers:
+            st.error("❌ Aucun provider AI n'est installé. Installez google-genai ou groq.")
+            return None, None, None, None
+        
+        provider = st.selectbox(
+            "Provider",
+            options=available_providers,
+            index=1 if "Groq" in available_providers else 0,
+            help="Choisissez le provider AI. Groq est gratuit avec 1M tokens/jour!"
         )
         
-        # Modèle Gemini
-        models = TechnicalDocumentAnalyzer.list_available_models()
-        model = st.selectbox(
-            "🤖 Modèle Gemini",
-            options=list(models.keys()),
-            format_func=lambda k: models[k],
-            index=0,
-            help="Modèle Gemini à utiliser pour l'analyse"
-        )
+        provider_key = "groq" if "Groq" in provider else "gemini"
         
-        if api_key:
-            st.success("✅ Clé API configurée")
-        else:
-            st.warning("⚠️ Entrez votre clé API Gemini")
+        # Configuration selon le provider
+        if provider_key == "groq":
+            api_key = st.text_input(
+                "🔑 Clé API Groq (Gratuite)",
+                type="password",
+                value=os.environ.get("GROQ_API_KEY", ""),
+                help="Obtenez une clé gratuite sur https://console.groq.com - 1M tokens/jour!"
+            )
+            
+            models = GroqDocumentAnalyzer.list_available_models()
+            model = st.selectbox(
+                "🤖 Modèle Groq",
+                options=list(models.keys()),
+                format_func=lambda k: models[k],
+                index=0,
+                help="Llama 3.3 70B recommandé pour la qualité"
+            )
+            
+            if api_key:
+                st.success("✅ Clé API Groq configurée")
+                st.info("🎉 Gratuit: 1M tokens/jour!")
+            else:
+                st.warning("⚠️ Entrez votre clé API Groq (gratuite sur console.groq.com)")
+        
+        else:  # Gemini
+            api_key = st.text_input(
+                "🔑 Clé API Google Gemini",
+                type="password",
+                value=os.environ.get("GEMINI_API_KEY", ""),
+                help="Votre clé API Gemini (obtenez-la sur https://makersuite.google.com/app/apikey)"
+            )
+            
+            models = TechnicalDocumentAnalyzer.list_available_models()
+            model = st.selectbox(
+                "🤖 Modèle Gemini",
+                options=list(models.keys()),
+                format_func=lambda k: models[k],
+                index=0,
+                help="Modèle Gemini à utiliser pour l'analyse"
+            )
+            
+            if api_key:
+                st.success("✅ Clé API Gemini configurée")
+            else:
+                st.warning("⚠️ Entrez votre clé API Gemini")
         
         st.divider()
         
@@ -138,7 +181,7 @@ def sidebar_config():
         st.markdown("**Version 2.0** - Analyseur modulaire")
         st.markdown("Développé pour l'analyse de fiches techniques")
     
-    return api_key, model, ocr_config
+    return api_key, model, ocr_config, provider_key
 
 
 def render_template_selector():
@@ -174,7 +217,7 @@ def render_template_selector():
     return template
 
 
-def render_single_analysis(template: DocumentTemplate, api_key: str, model: str, ocr_config: dict):
+def render_single_analysis(template: DocumentTemplate, api_key: str, model: str, ocr_config: dict, provider: str):
     """Analyse d'un seul document"""
     st.header("📄 Analyse d'un document")
     
@@ -194,7 +237,7 @@ def render_single_analysis(template: DocumentTemplate, api_key: str, model: str,
         with col2:
             if st.button("🚀 Lancer l'analyse", type="primary", use_container_width=True):
                 if not api_key:
-                    st.error("⚠️ Veuillez entrer votre clé API Gemini dans la barre latérale")
+                    st.error("⚠️ Veuillez entrer votre clé API dans la barre latérale")
                     return
                 
                 with st.spinner("Extraction du texte (OCR)..."):
@@ -213,7 +256,7 @@ def render_single_analysis(template: DocumentTemplate, api_key: str, model: str,
                 
                 with st.spinner("Analyse IA en cours..."):
                     try:
-                        analyzer = TechnicalDocumentAnalyzer(api_key=api_key, model=model)
+                        analyzer = create_analyzer(provider=provider, api_key=api_key, model=model)
                         result = analyzer.analyze(ocr_text, template)
                         
                         # Check for errors in result
@@ -366,7 +409,7 @@ def render_analysis_results(result: dict):
         )
 
 
-def render_batch_analysis(template: DocumentTemplate, api_key: str, model: str, ocr_config: dict):
+def render_batch_analysis(template: DocumentTemplate, api_key: str, model: str, ocr_config: dict, provider: str):
     """Analyse par lot de documents"""
     st.header("📁 Analyse par lot")
     
@@ -382,7 +425,7 @@ def render_batch_analysis(template: DocumentTemplate, api_key: str, model: str, 
         
         if st.button("🚀 Lancer l'analyse du lot", type="primary", use_container_width=True):
             if not api_key:
-                st.error("⚠️ Veuillez entrer votre clé API Gemini")
+                st.error("⚠️ Veuillez entrer votre clé API")
                 return
             
             progress_bar = st.progress(0)
@@ -409,7 +452,7 @@ def render_batch_analysis(template: DocumentTemplate, api_key: str, model: str, 
                 progress_bar.progress((i + 1) / (len(uploaded_files) * 2))
             
             # Phase 2: Analyse IA
-            analyzer = TechnicalDocumentAnalyzer(api_key=api_key, model=model)
+            analyzer = create_analyzer(provider=provider, api_key=api_key, model=model)
             batch_analyzer = BatchAnalyzer(analyzer)
             
             results = batch_analyzer.analyze_multiple(documents, template)
@@ -480,17 +523,17 @@ def main():
     
     # En-tête
     st.title("📄 Analyseur de Fiches Techniques")
-    st.markdown("**Analysez vos documents techniques avec Google Gemini Pro** ✨")
+    st.markdown("**Analysez vos documents techniques avec Google Gemini ou Groq AI** ✨")
     st.divider()
     
     # Configuration
     config_result = sidebar_config()
     if config_result is None:
-        st.error("❌ Impossible de démarrer: google-genai n'est pas installé")
-        st.code("pip install google-genai", language="bash")
+        st.error("❌ Impossible de démarrer: aucun provider AI n'est installé")
+        st.code("pip install groq", language="bash")
         return
     
-    api_key, model, ocr_config = config_result
+    api_key, model, ocr_config, provider = config_result
     
     # Sélection du template
     template = render_template_selector()
@@ -501,14 +544,14 @@ def main():
     tab1, tab2 = st.tabs(["📄 Analyse unique", "📁 Analyse par lot"])
     
     with tab1:
-        render_single_analysis(template, api_key, model, ocr_config)
+        render_single_analysis(template, api_key, model, ocr_config, provider)
     
     with tab2:
-        render_batch_analysis(template, api_key, model, ocr_config)
+        render_batch_analysis(template, api_key, model, ocr_config, provider)
     
     # Pied de page
     st.divider()
-    st.caption("Analyseur de Fiches Techniques v2.0 - Propulsé par Google Gemini & Streamlit")
+    st.caption("Analyseur de Fiches Techniques v2.0 - Propulsé par Google Gemini & Groq AI")
 
 
 if __name__ == "__main__":
