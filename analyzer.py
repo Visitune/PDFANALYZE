@@ -21,13 +21,14 @@ class TechnicalDocumentAnalyzer:
     """Analyseur de documents techniques basé sur Google Gemini Pro"""
     
     AVAILABLE_MODELS = {
-        "gemini-2.0-flash": "Gemini 2.0 Flash (Rapide & Puissant)",
-        "gemini-1.5-pro": "Gemini 1.5 Pro (Qualité)",
-        "gemini-1.5-flash": "Gemini 1.5 Flash (Rapide)",
-        "gemini-1.0-pro": "Gemini 1.0 Pro (Stable)",
+        "gemini-3-pro-preview": "Gemini 3 Pro Preview (Meilleur modèle)",
+        "gemini-2.5-pro-preview": "Gemini 2.5 Pro Preview",
+        "gemini-2.0-flash": "Gemini 2.0 Flash",
+        "gemini-1.5-pro": "Gemini 1.5 Pro",
+        "gemini-1.5-flash": "Gemini 1.5 Flash",
     }
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-pro-preview"):
         if not GEMINI_AVAILABLE:
             raise ImportError("google-genai n'est pas installé. Lancez: pip install google-genai")
         
