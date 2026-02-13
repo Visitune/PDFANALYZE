@@ -1,1 +1,10 @@
-google-genai
+# Packages système pour le déploiement Streamlit Cloud
+# Ces packages sont installés via apt-get
+
+# OCR Engine
+tesseract-ocr
+tesseract-ocr-fra
+tesseract-ocr-eng
+
+# PDF processing
+poppler-utils
