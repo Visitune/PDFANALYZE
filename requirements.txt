@@ -1,0 +1,20 @@
+# API et Web
+streamlit>=1.28.0
+flask>=2.3.0
+gunicorn>=21.0.0
+
+# OCR et Traitement d'images
+pytesseract>=0.3.10
+pdf2image>=1.16.0
+Pillow>=10.0.0
+
+# IA - Google Gemini
+google-generativeai>=0.5.0
+
+# Génération de rapports
+reportlab>=4.0.0
+openpyxl>=3.1.0
+pandas>=2.0.0
+
+# Utilitaires
+python-dotenv>=1.0.0
