@@ -139,23 +139,54 @@ Réponds en JSON avec cette structure exacte:
                 contents=full_prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    max_output_tokens=4000,
-                    response_mime_type="application/json"
+                    max_output_tokens=8000
                 )
             )
             
-            result_text = response.text
+            # Handle different response formats
+            result_text = None
+            if hasattr(response, 'text') and response.text:
+                result_text = response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                # Try to extract from candidates
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and candidate.content:
+                    if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                        result_text = candidate.content.parts[0].text
+            
+            if not result_text:
+                return {"error": "Réponse vide de l'API", "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0, "recommendations": "Erreur: réponse vide"}}
+            
+            # Clean the response - remove markdown code blocks if present
+            result_text = result_text.strip()
+            if result_text.startswith('```json'):
+                result_text = result_text[7:]
+            if result_text.startswith('```'):
+                result_text = result_text[3:]
+            if result_text.endswith('```'):
+                result_text = result_text[:-3]
+            result_text = result_text.strip()
+            
             result = json.loads(result_text)
             
-            self.logger.info(f"Analyse terminée: {result['summary']['total_points']} points analysés")
+            # Validate required fields
+            if "points" not in result:
+                result["points"] = []
+            if "summary" not in result:
+                result["summary"] = {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}
+            if "global_status" not in result:
+                result["global_status"] = "NON_CONFORME"
+            
+            self.logger.info(f"Analyse terminée: {result['summary'].get('total_points', 0)} points analysés")
             return result
             
         except json.JSONDecodeError as e:
             self.logger.error(f"Erreur parsing JSON: {e}")
-            return {"error": "Format de réponse invalide", "raw_response": result_text if 'result_text' in locals() else "N/A"}
+            return {"error": f"Format de réponse invalide: {e}", "raw_response": result_text if 'result_text' in locals() and result_text else "N/A", "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}}
         except Exception as e:
             self.logger.error(f"Erreur analyse: {e}")
-            return {"error": str(e)}
+            import traceback
+            return {"error": str(e), "traceback": traceback.format_exc(), "global_status": "NON_CONFORME", "points": [], "summary": {"total_points": 0, "conforme": 0, "douteux": 0, "non_conforme": 0}}
     
     @classmethod
     def list_available_models(cls) -> Dict[str, str]:

@@ -215,11 +215,23 @@ def render_single_analysis(template: DocumentTemplate, api_key: str, model: str,
                     try:
                         analyzer = TechnicalDocumentAnalyzer(api_key=api_key, model=model)
                         result = analyzer.analyze(ocr_text, template)
+                        
+                        # Check for errors in result
+                        if "error" in result:
+                            st.error(f"❌ Erreur lors de l'analyse: {result['error']}")
+                            if "raw_response" in result:
+                                with st.expander("Voir la réponse brute"):
+                                    st.code(result["raw_response"])
+                            return
+                        
                         st.session_state.analysis_result = result
-                        st.success("✅ Analyse terminée!")
+                        st.success(f"✅ Analyse terminée! {result.get('summary', {}).get('total_points', 0)} points analysés")
                     
                     except Exception as e:
                         st.error(f"Erreur analyse: {e}")
+                        import traceback
+                        with st.expander("Détails de l'erreur"):
+                            st.code(traceback.format_exc())
                         return
         
         # Afficher les résultats
