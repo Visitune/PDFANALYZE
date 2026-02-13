@@ -41,6 +41,18 @@ brew install tesseract tesseract-lang
 
 L'application utilise `pdf2image` qui nécessite Poppler.
 
+**Option 1 - Auto-détection (recommandé):**
+Placez simplement le dossier Poppler dans le même dossier que l'application:
+```
+pdf_analyzer_v2/
+├── poppler-25.12.0/          ← Dossier Poppler ici
+│   └── Library/bin/
+├── ocr_engine.py
+└── ...
+```
+
+**Option 2 - Installation système:**
+
 **Windows:**
 ```bash
 # 1. Téléchargez Poppler depuis:
@@ -287,9 +299,18 @@ Modifiez [`app.py`](app.py:1) pour adapter l'interface à vos besoins.
 
 ### Erreur : "Unable to get page count. Is poppler installed and in PATH?"
 
-Cette erreur indique que **Poppler** n'est pas installé ou n'est pas dans votre PATH.
+Cette erreur indique que **Poppler** n'est pas trouvé.
 
-**Solution rapide :**
+**Solution 1 - Auto-détection (plus simple) :**
+Placez le dossier Poppler dans le dossier du projet :
+```
+pdf_analyzer_v2/
+├── poppler-25.12.0/
+│   └── Library/bin/
+└── ocr_engine.py
+```
+
+**Solution 2 - Installation système :**
 
 1. **Windows** :
    - Téléchargez Poppler : https://github.com/oschwartz10612/poppler-windows/releases

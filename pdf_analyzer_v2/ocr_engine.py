@@ -4,22 +4,61 @@ Moteur OCR modulaire avec prétraitement configurable.
 
 import io
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from PIL import Image, ImageEnhance, ImageOps
 from pdf2image import convert_from_bytes
 import pytesseract
 
 
+def get_poppler_path() -> Optional[str]:
+    """
+    Détecte automatiquement le chemin de Poppler.
+    Cherche d'abord dans le dossier du projet, puis dans le PATH système.
+    """
+    # Chercher dans le dossier du projet (où se trouve ce fichier)
+    current_dir = Path(__file__).parent.resolve()
+    
+    # Chercher un dossier poppler-* dans le projet
+    for item in current_dir.iterdir():
+        if item.is_dir() and item.name.startswith('poppler'):
+            # Vérifier si le sous-dossier Library/bin existe
+            poppler_bin = item / 'Library' / 'bin'
+            if poppler_bin.exists():
+                return str(poppler_bin)
+            # ou directement bin
+            poppler_bin2 = item / 'bin'
+            if poppler_bin2.exists():
+                return str(poppler_bin2)
+    
+    # Chercher aussi dans les sous-dossiers (pour les versions comme poppler-25.12.0)
+    for pattern in ['**/poppler*/Library/bin', '**/poppler*/bin']:
+        matches = list(current_dir.glob(pattern))
+        if matches:
+            return str(matches[0])
+    
+    return None
+
+
 class PopplerNotFoundError(RuntimeError):
     """Exception raised when Poppler is not installed or not in PATH."""
     
     MESSAGE = (
-        "POPPLER NOT FOUND: pdf2image requires Poppler to be installed and in PATH.\n\n"
-        "Windows Installation:\n"
+        "POPPLER NOT FOUND: pdf2image requires Poppler to be installed.\n\n"
+        "Option 1 - Auto-détection (recommandé):\n"
+        "Placez le dossier Poppler dans le même dossier que l'application:\n"
+        "  pdf_analyzer_v2/\n"
+        "    ├── poppler-25.12.0/\n"
+        "    │   └── Library/bin/\n"
+        "    ├── ocr_engine.py\n"
+        "    └── ...\n\n"
+        "Option 2 - Installation système:\n"
+        "Windows:\n"
         "1. Download Poppler from: https://github.com/oschwartz10612/poppler-windows/releases\n"
-        "2. Extract to C:\\Program Files\\poppler (or any folder)\n"
-        "3. Add the 'bin' folder to your PATH (e.g., C:\\Program Files\\poppler\\Library\\bin)\n"
+        "2. Extract to C:\\Program Files\\poppler\n"
+        "3. Add C:\\Program Files\\poppler\\Library\\bin to your PATH\n"
         "4. Restart VS Code/Terminal\n\n"
         "Ubuntu/Debian:\n"
         "  sudo apt-get install poppler-utils\n\n"
@@ -32,12 +71,29 @@ class PopplerNotFoundError(RuntimeError):
         self.original_error = original_error
 
 
-def _handle_pdf2image_error(e: Exception) -> None:
-    """Convertit les erreurs pdf2image en erreurs plus explicites."""
-    error_msg = str(e).lower()
-    if "poppler" in error_msg or "unable to get page count" in error_msg:
-        raise PopplerNotFoundError(e) from e
-    raise
+def convert_pdf_to_images(pdf_data: bytes, dpi: int = 300) -> List[Image.Image]:
+    """
+    Convertit un PDF en images en utilisant Poppler.
+    Tente d'abord l'auto-détection, sinon utilise le PATH système.
+    """
+    poppler_path = get_poppler_path()
+    
+    try:
+        if poppler_path:
+            # Utiliser le Poppler trouvé dans le projet
+            return convert_from_bytes(
+                pdf_data,
+                dpi=dpi,
+                poppler_path=poppler_path
+            )
+        else:
+            # Essayer avec le PATH système
+            return convert_from_bytes(pdf_data, dpi=dpi)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "poppler" in error_msg or "unable to get page count" in error_msg:
+            raise PopplerNotFoundError(e) from e
+        raise
 
 
 class OCREngine:
@@ -95,15 +151,9 @@ class OCREngine:
     def extract_text(self, pdf_data: bytes) -> str:
         """Extrait le texte d'un PDF via OCR"""
         text_parts = []
-        images = []
         
-        try:
-            images = convert_from_bytes(
-                pdf_data, 
-                dpi=self.config['dpi']
-            )
-        except Exception as e:
-            _handle_pdf2image_error(e)
+        # Conversion PDF -> Images (avec auto-détection Poppler)
+        images = convert_pdf_to_images(pdf_data, dpi=self.config['dpi'])
         
         try:
             for idx, img in enumerate(images):
@@ -146,12 +196,9 @@ class OCREngine:
     def extract_text_with_layout(self, pdf_data: bytes) -> List[Dict[str, Any]]:
         """Extrait le texte avec informations de mise en page"""
         pages = []
-        images = []
         
-        try:
-            images = convert_from_bytes(pdf_data, dpi=self.config['dpi'])
-        except Exception as e:
-            _handle_pdf2image_error(e)
+        # Conversion PDF -> Images (avec auto-détection Poppler)
+        images = convert_pdf_to_images(pdf_data, dpi=self.config['dpi'])
         
         try:
             for idx, img in enumerate(images):
