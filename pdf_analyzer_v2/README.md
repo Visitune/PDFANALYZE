@@ -15,7 +15,7 @@ Version améliorée et générique de l'analyseur de documents techniques avec i
 
 ### Prérequis système
 
-Installez Tesseract OCR sur votre système :
+#### 1. Tesseract OCR (requis pour l'OCR)
 
 **Windows:**
 ```bash
@@ -29,12 +29,39 @@ C:\Program Files\Tesseract-OCR
 **Linux (Ubuntu/Debian):**
 ```bash
 sudo apt-get update
-sudo apt-get install tesseract-ocr tesseract-ocr-fra poppler-utils
+sudo apt-get install tesseract-ocr tesseract-ocr-fra
 ```
 
 **macOS:**
 ```bash
 brew install tesseract tesseract-lang
+```
+
+#### 2. Poppler (requis pour le traitement PDF)
+
+L'application utilise `pdf2image` qui nécessite Poppler.
+
+**Windows:**
+```bash
+# 1. Téléchargez Poppler depuis:
+# https://github.com/oschwartz10612/poppler-windows/releases
+
+# 2. Extrayez vers C:\Program Files\poppler
+
+# 3. Ajoutez au PATH:
+C:\Program Files\poppler\Library\bin
+
+# 4. Redémarrez VS Code/Terminal
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get install poppler-utils
+```
+
+**macOS:**
+```bash
+brew install poppler
 ```
 
 ### Installation Python
@@ -245,6 +272,7 @@ Modifiez [`app.py`](app.py:1) pour adapter l'interface à vos besoins.
 - **Clé API requise** : Une clé Gemini valide est nécessaire (gratuit avec quota généreux)
 - **Quota gratuit** : Gemini Pro offre 1M tokens/jour gratuitement!
 - **Tesseract** : L'OCR nécessite Tesseract installé sur le système
+- **Poppler** : Le traitement PDF nécessite Poppler installé (voir section Prérequis)
 - **Confidentialité** : Les documents sont envoyés à l'API Google, ne traitez pas de données sensibles
 
 ## 💰 Comparaison des coûts
@@ -255,12 +283,37 @@ Modifiez [`app.py`](app.py:1) pour adapter l'interface à vos besoins.
 | **Google Gemini Pro** | **Gratuit** | **1M tokens/jour** |
 | Google Gemini Flash | Gratuit | 1M tokens/jour |
 
-## 🆘 Support
+## 🆘 Dépannage
+
+### Erreur : "Unable to get page count. Is poppler installed and in PATH?"
+
+Cette erreur indique que **Poppler** n'est pas installé ou n'est pas dans votre PATH.
+
+**Solution rapide :**
+
+1. **Windows** :
+   - Téléchargez Poppler : https://github.com/oschwartz10612/poppler-windows/releases
+   - Extrayez vers `C:\Program Files\poppler`
+   - Ajoutez `C:\Program Files\poppler\Library\bin` à votre PATH système
+   - **Redémarrez VS Code** (important !)
+
+2. **Linux** :
+   ```bash
+   sudo apt-get install poppler-utils
+   ```
+
+3. **macOS** :
+   ```bash
+   brew install poppler
+   ```
+
+### Autres problèmes
 
 Pour toute question ou problème :
 1. Vérifiez que Tesseract est correctement installé
-2. Vérifiez votre clé API OpenAI
-3. Consultez les logs dans le terminal
+2. Vérifiez que Poppler est dans votre PATH
+3. Vérifiez votre clé API Gemini
+4. Consultez les logs dans le terminal
 
 ## 📄 Licence
 

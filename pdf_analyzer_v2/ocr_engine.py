@@ -10,6 +10,36 @@ from PIL import Image, ImageEnhance, ImageOps
 from pdf2image import convert_from_bytes
 import pytesseract
 
+
+class PopplerNotFoundError(RuntimeError):
+    """Exception raised when Poppler is not installed or not in PATH."""
+    
+    MESSAGE = (
+        "POPPLER NOT FOUND: pdf2image requires Poppler to be installed and in PATH.\n\n"
+        "Windows Installation:\n"
+        "1. Download Poppler from: https://github.com/oschwartz10612/poppler-windows/releases\n"
+        "2. Extract to C:\\Program Files\\poppler (or any folder)\n"
+        "3. Add the 'bin' folder to your PATH (e.g., C:\\Program Files\\poppler\\Library\\bin)\n"
+        "4. Restart VS Code/Terminal\n\n"
+        "Ubuntu/Debian:\n"
+        "  sudo apt-get install poppler-utils\n\n"
+        "macOS:\n"
+        "  brew install poppler"
+    )
+    
+    def __init__(self, original_error=None):
+        super().__init__(self.MESSAGE)
+        self.original_error = original_error
+
+
+def _handle_pdf2image_error(e: Exception) -> None:
+    """Convertit les erreurs pdf2image en erreurs plus explicites."""
+    error_msg = str(e).lower()
+    if "poppler" in error_msg or "unable to get page count" in error_msg:
+        raise PopplerNotFoundError(e) from e
+    raise
+
+
 class OCREngine:
     """Moteur OCR configurable"""
     
@@ -65,13 +95,17 @@ class OCREngine:
     def extract_text(self, pdf_data: bytes) -> str:
         """Extrait le texte d'un PDF via OCR"""
         text_parts = []
+        images = []
         
         try:
             images = convert_from_bytes(
                 pdf_data, 
                 dpi=self.config['dpi']
             )
-            
+        except Exception as e:
+            _handle_pdf2image_error(e)
+        
+        try:
             for idx, img in enumerate(images):
                 self.logger.info(f"Traitement de la page {idx + 1}/{len(images)}")
                 
@@ -112,10 +146,14 @@ class OCREngine:
     def extract_text_with_layout(self, pdf_data: bytes) -> List[Dict[str, Any]]:
         """Extrait le texte avec informations de mise en page"""
         pages = []
+        images = []
         
         try:
             images = convert_from_bytes(pdf_data, dpi=self.config['dpi'])
-            
+        except Exception as e:
+            _handle_pdf2image_error(e)
+        
+        try:
             for idx, img in enumerate(images):
                 if self.config['preprocess']:
                     img = self.preprocess_image(img)
@@ -137,6 +175,7 @@ class OCREngine:
             raise
         
         return pages
+
 
 class OCRLanguageManager:
     """Gestionnaire des langues OCR"""
