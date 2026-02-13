@@ -9,8 +9,8 @@ from typing import List, Dict, Any, Optional
 from dataclasses import asdict
 
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import GenerationConfig
+    from google import genai
+    from google.genai import types
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -21,24 +21,23 @@ class TechnicalDocumentAnalyzer:
     """Analyseur de documents techniques basé sur Google Gemini Pro"""
     
     AVAILABLE_MODELS = {
-        "gemini-3-pro-preview": "🌟 Gemini 3 Pro (Meilleur modèle - Multimodal)",
         "gemini-2.0-flash": "Gemini 2.0 Flash (Rapide & Puissant)",
         "gemini-1.5-pro": "Gemini 1.5 Pro (Qualité)",
         "gemini-1.5-flash": "Gemini 1.5 Flash (Rapide)",
         "gemini-1.0-pro": "Gemini 1.0 Pro (Stable)",
     }
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-pro-preview"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
         if not GEMINI_AVAILABLE:
-            raise ImportError("google-generativeai n'est pas installé. Lancez: pip install google-generativeai")
+            raise ImportError("google-genai n'est pas installé. Lancez: pip install google-genai")
         
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise ValueError("Clé API Gemini requise. Définissez GEMINI_API_KEY.")
         
-        genai.configure(api_key=self.api_key)
+        # New API uses client-based approach
+        self.client = genai.Client(api_key=self.api_key)
         self.model_name = model
-        self.model = genai.GenerativeModel(model)
         self.logger = logging.getLogger(__name__)
     
     def generate_prompt(self, template: DocumentTemplate) -> str:
@@ -134,15 +133,15 @@ Réponds en JSON avec cette structure exacte:
         full_prompt = f"Tu es un système d'analyse documentaire expert. Tu réponds uniquement en JSON valide, sans texte additionnel.\n\n{prompt}\n\n{text}"
         
         try:
-            generation_config = GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=4000,
-                response_mime_type="application/json"
-            )
-            
-            response = self.model.generate_content(
-                full_prompt,
-                generation_config=generation_config
+            # New API uses client.models.generate_content()
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=4000,
+                    response_mime_type="application/json"
+                )
             )
             
             result_text = response.text

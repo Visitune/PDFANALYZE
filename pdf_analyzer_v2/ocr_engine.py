@@ -78,6 +78,14 @@ def convert_pdf_to_images(pdf_data: bytes, dpi: int = 300) -> List[Image.Image]:
     """
     poppler_path = get_poppler_path()
     
+    # Si Poppler est trouvé dans le projet, l'ajouter au PATH système
+    # pour que les DLLs soient trouvées sur Windows
+    if poppler_path:
+        import os
+        current_path = os.environ.get('PATH', '')
+        if poppler_path not in current_path:
+            os.environ['PATH'] = poppler_path + os.pathsep + current_path
+    
     try:
         if poppler_path:
             # Utiliser le Poppler trouvé dans le projet
